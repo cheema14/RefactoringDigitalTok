@@ -194,65 +194,38 @@ class BookingController extends Controller
 
     public function distanceFeed(Request $request)
     {
-        $data = $request->all();
+        $data = $request->only(['distance', 'time', 'jobid', 'session_time', 'flagged', 'manually_handled', 'by_admin', 'admincomment']);
 
-        if (isset($data['distance']) && $data['distance'] != "") {
-            $distance = $data['distance'];
-        } else {
-            $distance = "";
-        }
-        if (isset($data['time']) && $data['time'] != "") {
-            $time = $data['time'];
-        } else {
-            $time = "";
-        }
-        if (isset($data['jobid']) && $data['jobid'] != "") {
-            $jobid = $data['jobid'];
-        }
+        $distance = $data['distance'] ?? '';
+        $time = $data['time'] ?? '';
+        $jobid = $data['jobid'] ?? '';
+        $session = $data['session_time'] ?? '';
+        $flagged = ($data['flagged'] === 'true' && $data['admincomment'] !== '') ? 'yes' : 'no';
+        $manually_handled = ($data['manually_handled'] === 'true') ? 'yes' : 'no';
+        $by_admin = ($data['by_admin'] === 'true') ? 'yes' : 'no';
+        $admincomment = $data['admincomment'] ?? '';
 
-        if (isset($data['session_time']) && $data['session_time'] != "") {
-            $session = $data['session_time'];
-        } else {
-            $session = "";
+        if(empty($jobid)){
+            return response('Missing jobid');
         }
 
-        if ($data['flagged'] == 'true') {
-            if($data['admincomment'] == '') return "Please, add comment";
-            $flagged = 'yes';
-        } else {
-            $flagged = 'no';
-        }
-        
-        if ($data['manually_handled'] == 'true') {
-            $manually_handled = 'yes';
-        } else {
-            $manually_handled = 'no';
-        }
-
-        if ($data['by_admin'] == 'true') {
-            $by_admin = 'yes';
-        } else {
-            $by_admin = 'no';
-        }
-
-        if (isset($data['admincomment']) && $data['admincomment'] != "") {
-            $admincomment = $data['admincomment'];
-        } else {
-            $admincomment = "";
-        }
         if ($time || $distance) {
-
-            $affectedRows = Distance::where('job_id', '=', $jobid)->update(array('distance' => $distance, 'time' => $time));
+            Distance::where('job_id', $jobid)->update(['distance' => $distance, 'time' => $time]);
         }
 
         if ($admincomment || $session || $flagged || $manually_handled || $by_admin) {
-
-            $affectedRows1 = Job::where('id', '=', $jobid)->update(array('admin_comments' => $admincomment, 'flagged' => $flagged, 'session_time' => $session, 'manually_handled' => $manually_handled, 'by_admin' => $by_admin));
-
+            Job::where('id', $jobid)->update([
+                'admin_comments' => $admincomment,
+                'flagged' => $flagged,
+                'session_time' => $session,
+                'manually_handled' => $manually_handled,
+                'by_admin' => $by_admin,
+            ]);
         }
 
         return response('Record updated!');
     }
+
 
     public function reopen(Request $request)
     {
@@ -281,14 +254,20 @@ class BookingController extends Controller
     {
         $data = $request->all();
         $job = $this->repository->find($data['jobid']);
-        $job_data = $this->repository->jobToData($job);
 
-        try {
-            $this->repository->sendSMSNotificationToTranslator($job);
-            return response(['success' => 'SMS sent']);
-        } catch (\Exception $e) {
-            return response(['success' => $e->getMessage()]);
+        if($job){
+            
+            $job_data = $this->repository->jobToData($job);
+            
+            try {
+                $this->repository->sendSMSNotificationToTranslator($job);
+                return response(['success' => 'SMS sent']);
+            } catch (\Exception $e) {
+                return response(['success' => $e->getMessage()]);
+            }
         }
+
+        return response(['error'=> 'Failed to send sms notification']);
     }
 
 }
